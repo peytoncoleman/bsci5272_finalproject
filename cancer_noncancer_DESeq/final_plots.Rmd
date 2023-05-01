@@ -1,0 +1,115 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This script creates a volcano plot that visualizes the result of DESeq2 differential expression analysis between cancerous and non-cancerous samples from CPTAC and GTEx. Input data is the output of /cancer_noncancer_DESeq/diff_express_pancancer_deseq.R
+
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(ggrepel)
+library(limma)
+library(dplyr)
+load("C:/Users/pcole/Desktop/classes/genome_science/deseq_tissue.RDat") # results of DESEq2
+```
+
+```{r}
+res <- results(data)
+print(res) #let's look at the results table
+summary(data)
+```
+
+```{r preparevolcano}
+res <- as.data.frame(res)
+
+# add directions for up/down regulation
+res$direction[res$log2FoldChange >= 0] <- "upregulated"
+res$direction[res$log2FoldChange < 0] <- "downregulated"
+
+# give the 0 pvalues the next smallest number for the graph if there are any
+res$pvalue[res$pvalue == 0] <- min(res$pvalue[res$pvalue != 0 & !is.na(res$pvalue)])
+
+# Calculate Bonferroni adjusted p-values and store in a new column "bonferroni_padj"
+bonferroni <- 0.05/nrow(res)
+res$bonferroni_padj <- p.adjust(res$pvalue, method = "bonferroni")
+
+# add in gene names for labels
+map <- data.table::fread("gene_map.txt") # exported from BioMart
+colnames(map) <- gsub(" ", "_", colnames(map)) # remove spaces from colnames
+
+# get gene names from the original matrix
+gene_names <- read.table("gene_names.txt", h = T)
+res$name <- gene_names$x
+res_names <- merge(res, map, by.x = "name", by.y = "Transcript_stable_ID_version")
+
+# remove duplicate gene names (some have multiple transcripts)
+res_names_unique <- res_names[!duplicated(res_names$Gene_name),]
+
+# Extract genes for labeling
+
+# top 10 highest LFC
+top10poslfc <- res_names_unique %>%
+                  filter(log2FoldChange > 0) %>%
+                  arrange(desc(log2FoldChange)) %>%
+                  filter(pvalue < bonferroni) %>%
+                  head(10)
+# top 10 lowest LFC
+top10neglfc <- res_names_unique %>%
+                  filter(log2FoldChange < 0) %>%
+                  arrange(log2FoldChange) %>%
+                  filter(pvalue < bonferroni) %>%
+                  head(10)
+
+toplfc <- rbind(top10poslfc, top10neglfc)
+
+# top 10 upregulated pvalues
+top10p <- res_names_unique[order(res_names_unique$pvalue)[1:10], ]
+
+# top 10 downregulated pvalues
+top10pneg <- res_names_unique %>%
+              filter(log2FoldChange < 0) %>%
+              arrange(pvalue) %>%
+              head(10)
+
+top_p <- rbind(top10p, top10pneg)
+
+# known oncogenes/tumor suppressors
+known <- res_names_unique %>% 
+  filter(grepl("PTEN|TP53|MYC|RAS", Gene_name)) %>%
+  filter(pvalue < bonferroni) %>%
+  arrange(pvalue) %>%
+  head(20)
+  
+labels <- rbind(top_p, known)
+labels <- rbind(labels, toplfc)
+
+```
+
+
+```{r volcano}
+
+# Make Volcano plot
+pdf(file = "volcanoplot.pdf", width = 8, height = 8)
+ggplot(data = res_names_unique, aes(x = log2FoldChange, y = -log10(bonferroni_padj))) +
+  geom_jitter(aes(color = ifelse(pvalue < bonferroni, direction, "nonsignificant")), size = .75) +
+  scale_color_manual(name = "Direction", 
+                     values = c("upregulated" = "red", "downregulated" = "blue"), 
+                     labels = c("Downregulated", "Upregulated")) +
+  theme_classic() +
+  # Add labels for the top genes
+ geom_label_repel(data = labels, aes(label = Gene_name), 
+                  max.overlaps = 100,
+                  size = 2.5) +
+  ggtitle("Differential Gene Expression in Cancerous vs. Non-Cancerous Samples") +
+  ylab("Bonferroni corrected p-value") +
+  xlab("Log2 Fold Change (LFC)")
+dev.off()
+```
+
+
+```{r}
+sig <- filter(res_names_unique, pvalue < bonferroni)
+write.csv(sig, "significant_genes.csv", quote = F, row.names = F)
+```
+

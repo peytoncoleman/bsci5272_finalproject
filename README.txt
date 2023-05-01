@@ -6,8 +6,13 @@ GTEx (cancer cohort): https://gtexportal.org/home/datasets (we used the V8 datas
 
 Cancer vs. Non-cancer differential expression
 	Workflow:
-		/cancer_noncancer_DESeq/making_genecounts_files.R
+		/cancer_noncancer_DESeq/making_genecounts_files.R 
+			Makes raw gene count matrices for GTEx and CPTAC samples
 		/cancer_noncancer_DESeq/diff_express_pancancer_format.R
+			Formats data correctly for differential expression analysis in DESeq2
 		/cancer_noncancer_DESeq/diff_express_pancancer_deseq.R
+			Runs DESeq2
+		/cancer_noncancer_DESeq/final_plots.Rmd
+			Creates volcano plot (Figure 1)
 
 
