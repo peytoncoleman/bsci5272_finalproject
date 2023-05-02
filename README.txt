@@ -16,3 +16,9 @@ Cancer vs. Non-cancer differential expression
 			Creates volcano plot (Figure 1)
 
 
+Lung vs. Brain vs. Pancreatic Cancer differential expression
+	Workflow:
+		/cancer_type_ANOVA/normalize_cols.ipynb
+			Normalizes data (input is output of /cancer_noncancer_DESeq/making_genecounts_files.R)
+		/cancer_type_ANOVA/
+			Runs ANOVA and creates manhattan plot (Figure 2)
